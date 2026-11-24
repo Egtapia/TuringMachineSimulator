@@ -170,3 +170,31 @@ table.data tr.final-max_steps td { background: rgba(192, 132, 252, .18); color: 
 kbd { padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); font: 11px var(--mono); }
 ::-webkit-scrollbar { height: 10px; width: 10px; } ::-webkit-scrollbar-thumb { background: rgba(124, 92, 255, .4); border-radius: 8px; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ================= STATE DIAGRAM ================= */
+:root { --halo: #0f1630; }
+[data-theme="light"] { --halo: #f4f6ff; }
+.diagram-box { margin: 10px 0 4px; border: 1px solid var(--border); border-radius: 14px; background: var(--input); overflow: hidden; }
+.diagram-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-size: .75rem; text-transform: uppercase; letter-spacing: .8px; color: var(--text); border-bottom: 1px solid var(--border); }
+.diagram-head .muted { text-transform: none; letter-spacing: 0; }
+.diagram-viewport { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+.diagram-viewport svg { display: block; margin: 0 auto; }
+#diagram .edge { fill: none; stroke: var(--muted); stroke-width: 1.6; opacity: .75; transition: stroke .2s, stroke-width .2s, opacity .2s; }
+#diagram .edge.firing { stroke: var(--accent-2); stroke-width: 3; opacity: 1; stroke-dasharray: 7 5; animation: dash .6s linear infinite; marker-end: url(#tm-arrow-a); filter: drop-shadow(0 0 5px var(--accent-2)); }
+#diagram .edge.start-arrow { opacity: 1; }
+@keyframes dash { to { stroke-dashoffset: -12; } }
+#diagram .arrow-n { fill: var(--muted); } #diagram .arrow-a { fill: var(--accent-2); }
+#diagram .edge-label { font: 600 11px var(--mono); fill: var(--muted); paint-order: stroke; stroke: var(--halo); stroke-width: 4px; stroke-linejoin: round; transition: fill .2s; }
+#diagram .edge-label.firing { fill: var(--accent-2); }
+#diagram .node .body { fill: var(--cell); stroke: var(--muted); stroke-width: 1.5; transition: stroke .2s, fill .2s; }
+#diagram .node-label { font: 700 12px var(--mono); fill: var(--cell-text); pointer-events: none; }
+#diagram .node.accept .ring { fill: none; stroke: var(--ok); stroke-width: 1.5; }
+#diagram .node.accept .body { stroke: var(--ok); } #diagram .node.reject .body { stroke: var(--bad); }
+#diagram .node.active .body { stroke: var(--accent-2); stroke-width: 3; fill: rgba(34, 211, 238, .22); }
+#diagram .node.active { filter: drop-shadow(0 0 9px var(--accent-2)); }
+#diagram .node.pulse .body, #diagram .node.pulse .ring { animation: node-pulse .55s ease-out; transform-box: fill-box; transform-origin: center; }
+@keyframes node-pulse { 0% { transform: scale(1.18); } 100% { transform: scale(1); } }
+#diagram .node.ok .body { stroke: var(--ok); fill: rgba(52, 211, 153, .28); } #diagram .node.ok { filter: drop-shadow(0 0 10px var(--ok)); }
+#diagram .node.bad .body { stroke: var(--bad); fill: rgba(251, 113, 133, .28); } #diagram .node.bad { filter: drop-shadow(0 0 10px var(--bad)); }
+#diagram .node.stuck .body { stroke: var(--limit); fill: rgba(192, 132, 252, .28); } #diagram .node.stuck { filter: drop-shadow(0 0 10px var(--limit)); }
+#diagram .token { fill: var(--accent-2); stroke: #fff; stroke-width: 2; filter: drop-shadow(0 0 8px var(--accent-2)); }

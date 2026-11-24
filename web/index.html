@@ -71,6 +71,16 @@
           <div class="stat"><span>Status</span><strong id="stat-status" class="badge">Ready</strong></div>
         </div>
 
+        <div class="diagram-box">
+          <div class="diagram-head">
+            <span>State diagram <span class="muted">· edge label: read / write, move</span></span>
+            <button id="btn-zoom" class="btn ghost small-btn" title="Toggle fit / full size">⤢ Fit</button>
+          </div>
+          <div id="diagram-viewport" class="diagram-viewport">
+            <svg id="diagram" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="State transition diagram"></svg>
+          </div>
+        </div>
+
         <div id="tape-viewport" class="tape-viewport" aria-label="Turing machine tape">
           <div id="tape-track" class="tape-track"></div>
         </div>
@@ -110,6 +120,7 @@
 
   <script src="js/engine.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/diagram.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

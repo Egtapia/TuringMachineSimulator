@@ -61,7 +61,7 @@
     els.status.className = "badge " + status;
   }
 
-  /* ------------------------------------------------------ formal definition */
+  /*formal definition */
   function renderTuple(def, el) {
     const set = (xs) => "{ " + xs.map(esc).join(", ") + " }";
     const rows = [

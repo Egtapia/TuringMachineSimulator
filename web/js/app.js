@@ -19,7 +19,11 @@
     trace: { body: $("trace-body"), wrap: $("trace-wrap"), count: $("trace-count"), dropped: 0 },
   };
 
-  const app = { presets: [], preset: null, sim: null, playing: false, timer: null, lastRec: null };
+  const app = { presets: [], preset: null, sim: null, playing: false, timer: null, lastRec: null, animMs: 450 };
+
+  /* state diagram (see diagram.js) */
+  const diagram = new Diagram($("diagram-viewport"), $("diagram"));
+  diagram.onFitChange = (fit) => { $("btn-zoom").textContent = fit ? "⤢ Fit" : "⤢ 1:1"; };
 
   /* ------------------------------------------------------------- messages */
   function showAlert(html) { el.alert.innerHTML = html; el.alert.classList.remove("hidden"); }
@@ -64,6 +68,7 @@
       `<button class="chip" data-i="${i}" title="Expected: ${UI.esc(e.expected)}">${e.input === "" ? "(empty)" : UI.esc(e.input)}</button>`).join("");
     UI.renderTuple(p.definition, el.tuple);
     UI.renderDelta(p.definition, el.deltaBody);
+    diagram.build(p.definition);
     initSim();
   }
 
@@ -98,6 +103,7 @@
       app.sim = new Simulator(def, text, max);
       UI.traceInitial(el.trace, app.sim);
     }
+    if (def) diagram.reset(def.start);
     render();
   }
 
@@ -133,7 +139,11 @@
   function advance() {
     const sim = app.sim;
     const rec = sim.step();
-    if (rec) { UI.traceStep(el.trace, rec, fmtTransition); app.lastRec = rec; }
+    if (rec) {
+      UI.traceStep(el.trace, rec, fmtTransition);
+      app.lastRec = rec;
+      if (app.animMs >= 0) diagram.fire(rec, app.animMs);   // -1 = skip diagram (run to end)
+    }
     if (sim.halted) { finish(); return false; }
     return true;
   }
@@ -142,10 +152,12 @@
     pause();
     UI.traceFinal(el.trace, app.sim);
     UI.showResult(app.sim, el.result);
+    diagram.markHalt(app.sim);
   }
 
   function stepOnce() {
     if (!app.sim || app.sim.halted) return;
+    app.animMs = 450;
     advance();
     render(app.lastRec ? app.lastRec.headBefore : undefined);
   }
@@ -171,6 +183,7 @@
   function tick() {
     if (!app.playing) return;
     const { delay, perTick } = speedInfo();
+    app.animMs = perTick > 1 ? 0 : Math.min(600, Math.round(delay * 0.8));
     for (let i = 0; i < perTick; i++) if (!advance()) break;
     render(app.lastRec ? app.lastRec.headBefore : undefined);
     if (app.playing) app.timer = setTimeout(tick, delay);
@@ -179,7 +192,11 @@
   function runToEnd() {
     if (!app.sim || app.sim.halted) return;
     pause();
+    app.animMs = -1;
     while (advance()) { /* keep going until it halts or hits N_max */ }
+    diagram.reset(app.sim.state);
+    diagram.markHalt(app.sim);
+    app.animMs = 450;
     render();
   }
 
@@ -205,6 +222,7 @@
   el.ff.addEventListener("click", runToEnd);
   el.reset.addEventListener("click", initSim);
   el.follow.addEventListener("change", () => render());
+  $("btn-zoom").addEventListener("click", () => diagram.setFit(!diagram.fit));
   el.speed.addEventListener("input", () => { el.speedLabel.textContent = SPEEDS[el.speed.value - 1] + " steps/s"; });
   el.exportBtn.addEventListener("click", () => download("turing-trace.txt", UI.traceToText(app.sim, fmtTransition)));
 
