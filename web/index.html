@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Turing Machine Simulator</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">⟨M⟩</span>
+      <div>
+        <h1>Turing Machine Simulator</h1>
+        <p class="formula">M = (Q, Σ, Γ, δ, q<sub>0</sub>, q<sub>accept</sub>, q<sub>reject</sub>)</p>
+      </div>
+    </div>
+    <button id="btn-theme" class="btn ghost icon" title="Toggle light / dark theme" aria-label="Toggle theme">◐</button>
+  </header>
+
+  <div id="alert" class="alert hidden" role="alert"></div>
+
+  <main class="layout">
+    <!-- ============================ LEFT COLUMN ============================ -->
+    <aside class="col">
+      <section class="card">
+        <h2>Machine &amp; input</h2>
+
+        <label for="preset-select">Preset</label>
+        <select id="preset-select"></select>
+        <p id="preset-desc" class="muted small"></p>
+
+        <label for="input-string">Input string <i>w</i></label>
+        <input id="input-string" type="text" spellcheck="false" autocomplete="off" placeholder="(empty string)">
+        <p id="input-hint" class="hint"></p>
+        <div id="examples" class="chips" aria-label="Example inputs"></div>
+
+        <div class="row">
+          <div>
+            <label for="max-steps">N<sub>max</sub> (step limit)</label>
+            <input id="max-steps" type="number" min="1" max="100000" step="1" value="10000">
+          </div>
+          <div class="grow">
+            <label>Custom machine</label>
+            <button id="btn-upload" class="btn ghost wide">Load JSON…</button>
+            <input id="file-input" type="file" accept=".json,application/json" hidden>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Formal definition</h2>
+        <dl id="tuple" class="tuple"></dl>
+        <h3>Transition function δ</h3>
+        <div id="delta-wrap" class="table-wrap">
+          <table class="data">
+            <thead><tr><th>q</th><th>σ</th><th></th><th>q′</th><th>σ′</th><th>D</th></tr></thead>
+            <tbody id="delta-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </aside>
+
+    <!-- ============================ RIGHT COLUMN =========================== -->
+    <section class="col">
+      <section class="card stage">
+        <div class="stats">
+          <div class="stat"><span>Current state q<sub>i</sub></span><strong id="stat-state" class="mono">–</strong></div>
+          <div class="stat"><span>Step</span><strong id="stat-step" class="mono">0</strong></div>
+          <div class="stat"><span>Head index</span><strong id="stat-head" class="mono">0</strong></div>
+          <div class="stat"><span>Status</span><strong id="stat-status" class="badge">Ready</strong></div>
+        </div>
+
+        <div id="tape-viewport" class="tape-viewport" aria-label="Turing machine tape">
+          <div id="tape-track" class="tape-track"></div>
+        </div>
+
+        <div class="controls">
+          <button id="btn-play" class="btn primary" title="Play / Pause (Space)">▶ Play</button>
+          <button id="btn-step" class="btn" title="Single step (→)">⏭ Step</button>
+          <button id="btn-ff" class="btn" title="Run to the end instantly">⏩ Run to end</button>
+          <button id="btn-reset" class="btn" title="Reset (R)">↺ Reset</button>
+          <div class="speed">
+            <label for="speed">Speed</label>
+            <input id="speed" type="range" min="1" max="10" step="1" value="4">
+            <span id="speed-label" class="mono">8 steps/s</span>
+          </div>
+          <label class="check"><input id="follow" type="checkbox" checked> Follow head</label>
+        </div>
+
+        <div id="result" class="result hidden" role="status"></div>
+      </section>
+
+      <section class="card trace">
+        <div class="trace-head">
+          <h2>Execution trace <span id="trace-count" class="muted small"></span></h2>
+          <button id="btn-export" class="btn ghost small-btn">⬇ Export .txt</button>
+        </div>
+        <div id="trace-wrap" class="table-wrap tall">
+          <table class="data">
+            <thead><tr><th>#</th><th>State sequence</th><th>Transition applied</th></tr></thead>
+            <tbody id="trace-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer class="foot">Shortcuts: <kbd>Space</kbd> play / pause · <kbd>→</kbd> step · <kbd>R</kbd> reset</footer>
+
+  <script src="js/engine.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
