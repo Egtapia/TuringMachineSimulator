@@ -1,0 +1,71 @@
+{
+  "id": "rejected_odd_ones",
+  "name": "Odd number of ones",
+  "default_input": "1011",
+  "max_steps": 100,
+  "machine": {
+    "states": [
+      "even",
+      "odd",
+      "accept",
+      "reject"
+    ],
+    "input_alphabet": [
+      "0",
+      "1"
+    ],
+    "tape_alphabet": [
+      "0",
+      "1",
+      "_"
+    ],
+    "blank": "_",
+    "start_state": "even",
+    "accept_state": "accept",
+    "reject_state": "reject",
+    "transitions": [
+      {
+        "from": "even",
+        "read": "0",
+        "to": "even",
+        "write": "0",
+        "move": "R"
+      },
+      {
+        "from": "even",
+        "read": "1",
+        "to": "odd",
+        "write": "1",
+        "move": "R"
+      },
+      {
+        "from": "odd",
+        "read": "0",
+        "to": "odd",
+        "write": "0",
+        "move": "R"
+      },
+      {
+        "from": "odd",
+        "read": "1",
+        "to": "even",
+        "write": "1",
+        "move": "R"
+      },
+      {
+        "from": "even",
+        "read": "_",
+        "to": "accept",
+        "write": "_",
+        "move": "S"
+      },
+      {
+        "from": "odd",
+        "read": "_",
+        "to": "reject",
+        "write": "_",
+        "move": "S"
+      }
+    ]
+  }
+}

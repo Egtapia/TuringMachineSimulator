@@ -1,0 +1,36 @@
+{
+  "id": "loop_protection",
+  "name": "Loop protection",
+  "default_input": "0",
+  "max_steps": 10,
+  "machine": {
+    "states": [
+      "even",
+      "odd",
+      "accept",
+      "reject"
+    ],
+    "input_alphabet": [
+      "0",
+      "1"
+    ],
+    "tape_alphabet": [
+      "0",
+      "1",
+      "_"
+    ],
+    "blank": "_",
+    "start_state": "even",
+    "accept_state": "accept",
+    "reject_state": "reject",
+    "transitions": [
+      {
+        "from": "even",
+        "read": "0",
+        "to": "even",
+        "write": "0",
+        "move": "S"
+      }
+    ]
+  }
+}

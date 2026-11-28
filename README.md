@@ -1,229 +1,118 @@
-# Interactive Multi-Interface Turing Machine Simulator
+# Turing Machine Simulator
 
-A deterministic, single-tape Turing machine simulator with **two interfaces that share the same
-configuration format**:
+Theory of Computation · Fall 2026
 
-* **Web visualizer** – animated, scrollable tape, play / pause / step / reset / speed controls,
-  live transition-table highlighting and a real-time execution trace.
-ASCII terminal UI – tape, head pointer (`^`), step counter and state printed at every step,
-  with interactive step-through and continuous-run modes.
+The simulator executes deterministic Turing machines from JSON definitions. Its objectives are to connect the formal model to individual tape operations, demonstrate machines that compute functions or recognize languages, and show how execution can stop under different conditions.
 
-**Zero external dependencies.** Python 3.8+ (standard library only) and any modern web browser.
-No `pip install`, no `npm install`.
+## Run the simulator
 
-## Quick start
+The terminal and local web server require Python 3.9 or newer. The web interface uses native HTML, CSS and JavaScript and requires a modern browser. Node.js 20 or newer is used for JavaScript tests only.
 
-```bash
-# Terminal UI (interactive menu)
-python -m tm
+From the project root, run:
 
-# Web UI  ->  opens http://localhost:8000/web/
+```text
 python serve.py
 ```
 
-> The web page loads `presets.json` with `fetch()`, which browsers block for `file://` pages.
-> That is why `serve.py` exists (a 30-line static server). If you open `web/index.html` by
-> double-clicking it, use the **Load JSON…** button and select `presets.json`.
+Open [http://127.0.0.1:8000/web/](http://127.0.0.1:8000/web/) if the browser does not open automatically. Use `python serve.py 9000` to select a different port. When opening the HTML file directly from disk, use **Load JSON…** to import `presets.json` manually if the browser blocks the built-in fetch.
 
-### Terminal examples
-
-```bash
-python -m tm --list                                   # show built-in machines
-python -m tm -p binary-increment -i 1011              # step-through (press Enter)
-python -m tm -p w-hash-w -i 01#01 -m run -d 0.2       # continuous, 0.2 s per step
-python -m tm -p busy-beaver-4 -i "" -m run --final-only
-python -m tm -p unary-multiplication -i 11*111 -m run -d 0 --trace-file trace.txt
-python -m tm -c my_machine.json -i 0110 --max-steps 500
+```text
+python -m tm
+python -m tm --list
+python -m tm -p binary-increment -i 111 -m step
+python -m tm -p binary-increment -i 1011 -m run -d 0.3
+python -m tm -p w-hash-w -i "01#10" -m run
+python -m tm -c examples/accepted_even_ones.json -i 1010 --final-only
+python -m tm -p binary-increment -i 111 --final-only --trace-file trace.txt
 ```
 
-| Flag | Meaning |
-| --- | --- |
-| `-p, --preset` | preset id or number (`--list` shows them) |
-| `-c, --config` | path to your own JSON machine file |
-| `-i, --input` | input string (omit to be prompted, with validation) |
-| `-m, --mode` | `step` (press Enter per step, `r` = run rest, `q` = quit) or `run` |
-| `-d, --delay` | seconds between steps in `run` mode |
-| `-n, --max-steps` | **N<sub>max</sub>**, overrides the preset's step limit |
-| `--trace-file` | write the complete step-by-step trace to a text file |
-| `--final-only` | print only the last configuration and the summary |
-| `--no-color` | disable ANSI colours |
+`-p` accepts a preset ID or its list number. `-c` loads a custom JSON file. `-i` supplies the input and skips the prompt. At the input prompt, Enter selects the configured default. `-n` overrides the step limit, `-d` sets the delay in seconds, and `--no-color` disables ANSI colors. In step mode press Enter for one transition, `r` to continue automatically, or `q` to stop. The ASCII view shows the current state, head index, step count and status, with a caret under the scanned tape cell.
 
-Exit codes: `0` accepted · `1` rejected / undefined transition · `2` bad config or input · `3` N<sub>max</sub> reached.
+The terminal exits with 0 for acceptance, 1 for rejection, an undefined transition or a voluntary step-mode stop, 2 for invalid input or configuration, and 3 for a reached step limit. The displayed result distinguishes outcomes that share an exit code.
 
-Sample terminal output:
+## Formal model
 
-```
-Step    6  |  State: q1  |  Status: RUNNING
-     -2  -1   0   1   2   3   4   5 
-    +---+---+---+---+---+---+---+---+
-    | _ | _ | 1 | 0 | 1 | 0 | _ | _ |
-    +---+---+---+---+---+---+---+---+
-                      ^  head = 2
-    Applied: δ(q1, 1) → (q1, 0, L)
-```
+A deterministic Turing machine is the seven-tuple **M = (Q, Σ, Γ, δ, q₀, q_accept, q_reject)**. Q is a finite state set. Σ is the input alphabet, and Γ is the tape alphabet. Γ contains Σ and a blank symbol outside Σ. The initial state and both terminal states belong to Q. The accept and reject states are distinct.
 
-## Project structure
+For a nonterminal state and a scanned symbol, **δ(q, σ) = (q′, σ′, D)** changes the state to q′, writes σ′ at the current index, and moves the head left, right, or in place for **L**, **R**, or **S**. Each state/symbol pair has at most one transition. The head starts at index 0. The sparse tape extends in both directions and returns the blank symbol at every unwritten index.
 
-```
-turing-machine-simulator/
-├── presets.json            # built-in machines + test cases (shared by both UIs)
-├── serve.py                # tiny local web server
-├── README.md
-├── tm/                     # Python package: engine + terminal UI
-│   ├── definition.py       #   7-tuple model, JSON validation, input validation (Σ)
-│   ├── tape.py             #   sparse, logically infinite tape
-│   ├── simulator.py        #   step engine, statuses, N_max protection
-│   ├── presets.py          #   JSON loading (presets file / single machine)
-│   ├── cli.py              #   ASCII renderer, interactive & continuous modes
-│   └── __main__.py         #   enables `python -m tm`
-├── web/                    # browser UI (plain HTML/CSS/JS, no build step)
-│   ├── index.html
-│   ├── css/style.css
-│   └── js/
-│       ├── engine.js       #   same engine as tm/, in JavaScript
-│       ├── ui.js           #   DOM rendering (tape, trace, tables)
-│       └── app.js          #   controller: playback, events, file loading
-└── tests/test_presets.py   # unit tests (python -m unittest)
-```
+## Architecture and files
 
-## Architecture
+Python and JavaScript execute machines independently. They read the same JSON format and use equivalent sparse tape and halting semantics.
 
-```
-            ┌────────────────────────────┐
-presets.json│  MachineDefinition         │  7-tuple (Q, Σ, Γ, δ, q0, q_accept, q_reject)
- / custom ─►│  + validation (all errors) │  → ConfigError lists *every* problem found
-            └─────────────┬──────────────┘
-                          │
-            ┌─────────────▼──────────────┐
-  input w ─►│  Simulator                 │  validates w ∈ Σ*  → InputError
-            │  Tape (sparse dict / Map)  │  step() / run(), N_max, undefined δ handling
-            └──────┬───────────────┬─────┘
-                   │               │
-          ┌────────▼───────┐ ┌─────▼────────────┐
-          │ tm/cli.py      │ │ web/js/ui.js+app │
-          │ ASCII UI       │ │ visual UI        │
-          └────────────────┘ └──────────────────┘
-```
+| Path | Responsibility |
+|---|---|
+| `tm/definition.py`, `tm/presets.py` | Validate definitions, load files and unpack preset metadata |
+| `tm/tape.py`, `tm/simulator.py` | Python tape and execution |
+| `tm/cli.py`, `tm/__main__.py` | ASCII controls and module entry point |
+| `web/js/engine.js` | JavaScript validation, tape and execution |
+| `web/js/app.js`, `web/js/ui.js` | Web controls and rendering |
+| `web/js/diagram.js` | SVG state diagram, active state and transition highlights |
+| `web/index.html`, `web/css/styles.css` | Web markup and styling |
+| `serve.py`, `presets.json` | Loopback HTTP server and five shared presets |
+| `examples/`, `tests/`, `docs/` | Demonstrations, regression tests and submission guides |
 
-* **Formal model** – `MachineDefinition` stores Q, Σ, Γ, δ, q₀, q_accept and q_reject; δ is a
-  dictionary keyed by `(state, symbol)`, so lookups are O(1).
-* **Tape** – sparse dictionary of non-blank cells. The head index may be any integer, so the tape
-  grows to the left and to the right without shifting anything (no off-by-one on expansion).
-* **Moves** – `L` (−1), `R` (+1) and `S` (stay, 0).
-* **Halting** – the run ends in exactly one of these statuses:
+## Create and load a JSON machine
 
-| Status | Meaning |
-| --- | --- |
-| `accepted` | reached `q_accept` |
-| `rejected` | reached `q_reject` |
-| `no_transition` | δ(q, σ) is undefined → graceful *implicit rejection* (never a crash) |
-| `max_steps` | N<sub>max</sub> steps executed without halting (infinite-loop protection) |
-
-* **Validation** – the input string is checked against Σ before anything runs, reporting the first
-  offending symbol and its position. The web UI does this live while you type.
-* The Python and JavaScript engines implement identical semantics; both are verified against the
-  expected results stored in `presets.json`.
-
-## Built-in presets (`presets.json`)
-
-| id | Machine | What it does |
-| --- | --- | --- |
-| `binary-increment` | f(x) = x + 1 | binary, MSB first. `1011 → 1100`, `111 → 1000` |
-| `unary-multiplication` | integer multiplication | `1^a*1^b → 1^a*1^b=1^(a·b)`. `11*111 → 11*111=111111` |
-| `w-hash-w` | L = { w#w ∣ w ∈ {0,1}* } | decider: accepts `01#01`, rejects `01#10` |
-| `busy-beaver-3` | 3-state champion | six 1s in 13 steps on a blank tape |
-| `busy-beaver-4` | 4-state champion (bonus) | thirteen 1s in 107 steps, tape grows in both directions |
-
-Each preset ships with `examples` (inputs + expected status / tape / step count) that the test
-suite checks automatically.
-
-## Defining your own machine
-
-Create a `.json` file. The simplest form is a bare machine definition:
+Save a UTF-8 JSON object with the fields below. This bare machine accepts the empty string or a string of ones. The transition on blank stays in place as it enters the accept state.
 
 ```json
 {
-  "name": "Flip bits",
-  "description": "Replaces every 0 by 1 and every 1 by 0.",
-  "max_steps": 1000,
-  "default_input": "10110",
-  "machine": {
-    "states": ["q0", "q_accept", "q_reject"],
-    "input_alphabet": ["0", "1"],
-    "tape_alphabet": ["0", "1", "_"],
-    "blank": "_",
-    "start_state": "q0",
-    "accept_state": "q_accept",
-    "reject_state": "q_reject",
-    "transitions": [
-      { "from": "q0", "read": "0", "to": "q0", "write": "1", "move": "R" },
-      { "from": "q0", "read": "1", "to": "q0", "write": "0", "move": "R" },
-      { "from": "q0", "read": "_", "to": "q_accept", "write": "_", "move": "S" }
-    ]
-  }
+  "states": ["scan", "accept", "reject"],
+  "input_alphabet": ["1"],
+  "tape_alphabet": ["1", "_"],
+  "blank": "_",
+  "start_state": "scan",
+  "accept_state": "accept",
+  "reject_state": "reject",
+  "transitions": [
+    {"from": "scan", "read": "1", "to": "scan", "write": "1", "move": "R"},
+    {"from": "scan", "read": "_", "to": "accept", "write": "_", "move": "S"}
+  ]
 }
 ```
 
-Load it with `python -m tm -c flip.json` or with **Load JSON…** in the web UI.
-A file may also contain `{ "presets": [ … ] }` with several machines (this is the format of `presets.json`),
-or just the machine object itself (the keys of `"machine"` at the top level).
+Put the definition under `"machine"` to attach preset metadata, or put definitions and wrappers in a nonempty `"presets"` array. Optional fields are `id`, `name`, `description`, `default_input`, `max_steps`, and `examples`. An example has an `input` string and may include `expected`, `expected_tape` and `expected_steps`. Preset IDs must be unique within each collection. Alphabet symbols are single characters. Empty input alphabets and partial transition tables are supported. Inputs are validated before execution, so a configuration can include an intentionally invalid demonstration string.
 
-### Transition syntax
+Select **Load JSON…** in the browser or use `python -m tm -c FILE` in the terminal. For a collection, add `--list` to see its entries or use `-p ID` to select one. See [examples/README.md](examples/README.md) for ready-to-run files.
 
-Every entry of `"transitions"` encodes **δ(q<sub>i</sub>, σ) → (q<sub>j</sub>, σ′, D)**:
+## Built-in machines
 
-| JSON key | Symbol | Meaning |
-| --- | --- | --- |
-| `from` | q<sub>i</sub> | current state |
-| `read` | σ | symbol under the head |
-| `to` | q<sub>j</sub> | next state |
-| `write` | σ′ | symbol written to the current cell |
-| `move` | D | `"L"` left · `"R"` right · `"S"` stay |
+| Preset | Verified examples |
+|---|---|
+| Binary Increment | `0 → 1`, `1 → 10`, `1010 → 1011`, `1011 → 1100`, `111 → 1000`, `1111 → 10000`. Empty input writes `1` in two transitions at index −1. `1012` is invalid. |
+| Unary Integer Multiplication | `1*1 → 1*1=1`, `11*111 → 11*111=111111`, `111*11 → 111*11=111111`, `1*111 → 1*111=111`, `11* → 11*=`, `*11 → *11=`. `1**1` and `11` reach undefined transitions. `2*3` is invalid. |
+| Language w#w | Accepts `01#01`, `0110#0110` and `#`. Explicitly rejects `01#10`, `01#011`, `011#01` and the empty string. `01` and `01##01` reach undefined transitions. The tape contains the recognizer’s work marks. |
+| Busy Beaver, 3 states | Blank input reaches the accept state after 13 transitions with six ones. |
+| Busy Beaver, 4 states | Blank input reaches the accept state after 107 transitions with thirteen ones. The nonblank span contains one internal blank. |
 
-### Validation rules
+## Controls, outcomes and traces
 
-The loader reports **all** problems at once. A machine is rejected when:
+The web tape shows symbols, indices and the active head. Scroll horizontally to inspect cells or enable **Follow head** to track execution. The SVG diagram shows states, edges and terminal states. The transition table highlights the next and most recently applied rule. The state, head index and step count appear above the tape.
 
-* `states`, `input_alphabet`, `tape_alphabet` are not lists of non-empty strings, or contain duplicates;
-* tape/input symbols are not exactly one character;
-* `start_state`, `accept_state`, `reject_state` are missing or not in `states`; accept = reject;
-* the blank symbol is not in Γ, or is in Σ; or Σ ⊄ Γ;
-* a transition refers to an unknown state, a symbol outside Γ, or a move other than `L`/`R`/`S`;
-* two transitions share the same `(from, read)` (machines are deterministic);
-* a transition leaves `accept_state` or `reject_state` (halting states have none).
+Use **Play/Pause**, **Step**, **Run to end**, and **Reset**. Adjust the speed slider during playback. Run to end processes batches so the page can handle other events between them. With focus outside interactive controls, Space toggles playback, Right Arrow steps, and R resets.
 
-If no transition exists for the current `(state, symbol)` while *running*, the machine stops with
-status `no_transition` (treated as rejection).
+| Outcome | Meaning |
+|---|---|
+| Accepted | The machine entered its accept state. |
+| Rejected | The machine entered its reject state. |
+| Undefined transition | No rule applies to the scanned symbol and current state. |
+| Invalid input | A character is outside Σ. Execution is blocked. |
+| Step limit reached | The transition budget was exhausted. This result gives no conclusion about whether the machine would eventually halt. |
+| Invalid configuration | The file could not be parsed as JSON or failed definition validation. |
 
-### Optional preset fields
+The default limit for custom definitions is 10,000 transitions. The web input allows 1 through 100,000. The engines and CLI accept positive integers up to 2⁵³−1. Use practical limits because trace storage grows with execution length.
 
-| Field | Purpose |
-| --- | --- |
-| `id`, `name`, `description` | label and help text shown in both UIs |
-| `max_steps` | default N<sub>max</sub> (can be overridden in the UI / with `--max-steps`) |
-| `default_input` | pre-filled input string |
-| `examples` | `[{ "input": "…", "expected": "accepted", "expected_tape": "…", "expected_steps": 13 }]` – shown as clickable chips in the web UI and checked by the tests |
+Each transition records its number, previous state, read symbol, write symbol, direction, next state and before/after head index. The browser displays up to 1,000 recent trace rows and **Export .txt** includes the complete execution up to the current step. The terminal writes the complete trace with `--trace-file PATH`. Both tape views render a bounded window near the head on long tapes.
 
-## Web interface guide
+## Tests
 
-* **Tape** – blank cells are drawn on both sides of the used region, so the tape looks infinite;
-  scroll it freely or tick *Follow head* to keep the head centred. The cyan marker shows the head
-  and the current state q<sub>i</sub>; the cell that was just written flashes.
-* **Controls** – Play / Pause, single Step, Run to end (instant), Reset, and a 10-level speed
-  slider (1 → 500 steps/s). Shortcuts: `Space`, `→`, `R`.
-* **Transition table** – the transition about to be applied is highlighted in cyan, the one just applied in violet.
-* **Trace panel** – step number, state sequence and transition for every step, plus a final row with
-  the halting reason. *Export .txt* downloads the full trace.
-* **Safety** – N<sub>max</sub> is editable (1 – 100 000). Hitting it stops the run and shows a
-  "step limit reached" banner.
-* **Themes** – dark and light (the choice is remembered).
-
-## Running the tests
-
-```bash
+```text
 python -m unittest discover -s tests -v
+node --test tests/engine.test.cjs
+python tests/browser_smoke.py "<path to Chromium or Edge executable>"
 ```
 
-The suite checks every example of every preset, exhaustively verifies increment (0–199),
-multiplication (0×0 … 5×5) and `w#w` (all words up to length 3), the Busy Beaver results, tape
-expansion, infinite-loop protection, undefined transitions, Σ validation and configuration errors.
+The Node suite includes independent JavaScript tests and compares execution snapshots against Python. Set `TM_PYTHON` if the Python executable has a different name. The browser smoke test exercises the served page in headless Chromium or Edge.
+
+See the [presentation guide](docs/PRESENTATION_GUIDE.md) and [compliance report](docs/COMPLIANCE_REPORT.md).

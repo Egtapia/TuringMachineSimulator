@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 MOVES = ("L", "R", "S")
+MAX_SAFE_STEPS = 2**53 - 1
 
 
 class ConfigError(ValueError):
@@ -77,7 +78,12 @@ class MachineDefinition:
         sigma = string_list("input_alphabet", single_char=True)
         gamma = string_list("tape_alphabet", single_char=True)
 
-        blank = data.get("blank", "_")
+        if not states:
+            errors.append("'states' must not be empty.")
+        if not gamma:
+            errors.append("'tape_alphabet' must not be empty.")
+
+        blank = data.get("blank")
         if not isinstance(blank, str) or len(blank) != 1:
             errors.append("'blank' must be a single character.")
             blank = "_"
@@ -119,6 +125,9 @@ class MachineDefinition:
             if missing:
                 errors.append(f"{where}: missing key(s) {missing}.")
                 continue
+            if any(not isinstance(item[k], str) for k in ("from", "read", "to", "write", "move")):
+                errors.append(f"{where}: all transition fields must be strings.")
+                continue
             t = Transition(item["from"], item["read"], item["to"], item["write"], item["move"])
             if states and t.state not in states:
                 errors.append(f"{where}: unknown source state '{t.state}'.")
@@ -150,6 +159,8 @@ class MachineDefinition:
 
     def invalid_symbols(self, text: str) -> List[Tuple[int, str]]:
         """(position, symbol) pairs of every character of `text` not in Σ."""
+        if not isinstance(text, str):
+            raise InputError("Input must be a string.")
         allowed = set(self.input_alphabet)
         return [(i, ch) for i, ch in enumerate(text) if ch not in allowed]
 

@@ -19,7 +19,7 @@
     trace: { body: $("trace-body"), wrap: $("trace-wrap"), count: $("trace-count"), dropped: 0 },
   };
 
-  const app = { presets: [], preset: null, sim: null, playing: false, timer: null, lastRec: null, animMs: 450 };
+  const app = { customCount: 0, fastForward: false, presets: [], preset: null, sim: null, playing: false, timer: null, lastRec: null, animMs: 450 };
 
   /* state diagram (see diagram.js) */
   const diagram = new Diagram($("diagram-viewport"), $("diagram"));
@@ -43,16 +43,19 @@
     try {
       const res = await fetch("../presets.json");
       if (!res.ok) throw new Error("HTTP " + res.status);
-      app.presets = parseConfig(await res.json());
-      fillSelect(0);
-      selectPreset(0);
+      const builtin = parseConfig(await res.json());
+      const selected = app.preset;
+      app.presets = builtin.concat(app.presets);
+      fillSelect(app.customCount);
+      if (selected) el.preset.value = String(app.presets.indexOf(selected));
+      else selectPreset(0);
     } catch (err) {
       if (err instanceof ConfigError) { showAlert("<b>presets.json is invalid:</b>\n" + UI.esc(err.errors.join("\n"))); return; }
       showAlert(
         "<b>Could not load <code>presets.json</code>.</b>\nBrowsers block file access when the page is opened directly from disk. " +
         "Start the bundled server with <code>python serve.py</code> (from the project root) and open the address it prints — " +
         "or click <b>Load JSON…</b> and choose <code>presets.json</code> manually.");
-      el.preset.innerHTML = "<option>No machine loaded</option>";
+      if (!app.presets.length) el.preset.innerHTML = "<option>No machine loaded</option>";
       updateControls();
     }
   }
@@ -84,6 +87,7 @@
     UI.clearTrace(el.trace);
     app.lastRec = null;
     app.sim = null;
+    app.blockedStatus = null;
     const def = app.preset && app.preset.definition;
     if (!def) { render(); return; }
 
@@ -92,18 +96,23 @@
     const max = readMaxSteps();
     el.input.classList.toggle("invalid", bad.length > 0);
     el.maxSteps.classList.toggle("invalid", max === null);
+    el.input.setAttribute("aria-invalid", String(bad.length > 0));
+    el.maxSteps.setAttribute("aria-invalid", String(max === null));
 
     if (bad.length) {
       const shown = [...new Set(bad.map((b) => `'${b.symbol}'`))].join(", ");
-      setHint(`✗ ${shown} not in Σ = { ${def.sigma.join(", ")} } (first at position ${bad[0].index}).`, "error");
+      app.blockedStatus = "invalid_input";
+      setHint(`Invalid input: ${shown} not in Σ = { ${def.sigma.join(", ")} } (first at position ${bad[0].index}).`, "error");
     } else if (max === null) {
+      app.blockedStatus = "invalid_limit";
       setHint(`✗ N_max must be an integer between 1 and ${MAX_STEPS_CAP}.`, "error");
     } else {
       setHint(`✓ Valid string over Σ = { ${def.sigma.join(", ")} }.`, "ok");
       app.sim = new Simulator(def, text, max);
       UI.traceInitial(el.trace, app.sim);
     }
-    if (def) diagram.reset(def.start);
+    diagram.reset(def.start);
+    if (app.sim?.halted) finish();
     render();
   }
 
@@ -111,7 +120,7 @@
 
   function render(writtenIndex) {
     const sim = app.sim;
-    UI.renderStats(sim, el.stats);
+    UI.renderStats(sim, el.stats, app.blockedStatus);
     if (sim) {
       const fast = SPEEDS[el.speed.value - 1] > 6;
       UI.renderTape(sim, el.tape, { follow: el.follow.checked, smooth: !(app.playing && fast), writtenIndex });
@@ -128,23 +137,24 @@
     const can = !!app.sim && !app.sim.halted;
     el.play.disabled = !can;
     el.step.disabled = !can || app.playing;
-    el.ff.disabled = !can;
+    el.ff.disabled = !can || app.fastForward;
     el.reset.disabled = !app.sim;
-    el.exportBtn.disabled = !app.sim || app.sim.steps === 0;
+    el.exportBtn.disabled = !app.sim;
     el.play.textContent = app.playing ? "⏸ Pause" : "▶ Play";
     el.play.classList.toggle("playing", app.playing);
   }
 
   /** Executes one transition and updates the trace. Returns true if the machine is still running. */
-  function advance() {
+  function advance(showTrace = true) {
     const sim = app.sim;
     const rec = sim.step();
     if (rec) {
-      UI.traceStep(el.trace, rec, fmtTransition);
+      if (showTrace) UI.traceStep(el.trace, rec, fmtTransition);
       app.lastRec = rec;
       if (app.animMs >= 0) diagram.fire(rec, app.animMs);   // -1 = skip diagram (run to end)
     }
-    if (sim.halted) { finish(); return false; }
+    if (sim.halted && showTrace) finish();
+    if (sim.halted) return false;
     return true;
   }
 
@@ -156,7 +166,7 @@
   }
 
   function stepOnce() {
-    if (!app.sim || app.sim.halted) return;
+    if (el.step.disabled) return;
     app.animMs = 450;
     advance();
     render(app.lastRec ? app.lastRec.headBefore : undefined);
@@ -170,14 +180,16 @@
   }
 
   function play() {
-    if (!app.sim || app.sim.halted) return;
+    if (!app.sim || app.sim.halted || app.playing) return;
     app.playing = true;
     updateControls();
     tick();
   }
   function pause() {
     app.playing = false;
+    app.fastForward = false;
     clearTimeout(app.timer);
+    app.timer = null;
     if (app.sim) updateControls();
   }
   function tick() {
@@ -191,13 +203,23 @@
 
   function runToEnd() {
     if (!app.sim || app.sim.halted) return;
+    if (app.fastForward) return;
     pause();
+    app.playing = true;
+    app.fastForward = true;
     app.animMs = -1;
-    while (advance()) { /* keep going until it halts or hits N_max */ }
-    diagram.reset(app.sim.state);
-    diagram.markHalt(app.sim);
-    app.animMs = 450;
+    updateControls();
+    runBatch();
+  }
+
+  function runBatch() {
+    const sim = app.sim;
+    for (let i = 0; i < 500 && !sim.halted; i++) advance(false);
+    diagram.reset(sim.state);
+    UI.rebuildTrace(el.trace, sim, fmtTransition);
+    if (sim.halted) finish();
     render();
+    if (app.fastForward) app.timer = setTimeout(runBatch, 0);
   }
 
   function download(name, text) {
@@ -246,9 +268,10 @@
   });
 
   document.addEventListener("keydown", (e) => {
-    if (e.target.matches("input[type=text], input[type=number], select")) return;
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey ||
+        e.target.closest("input, select, button, textarea, a, [contenteditable], [tabindex]")) return;
     if (e.code === "Space") { e.preventDefault(); if (!el.play.disabled) el.play.click(); }
-    else if (e.key === "ArrowRight") { if (!el.step.disabled) stepOnce(); }
+    else if (e.key === "ArrowRight" && !el.step.disabled) { e.preventDefault(); stepOnce(); }
     else if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey) initSim();
   });
 
@@ -262,5 +285,6 @@
 
   /* ---------------------------------------------------------------- start */
   el.speedLabel.textContent = SPEEDS[el.speed.value - 1] + " steps/s";
+  render();
   loadBuiltIn();
 })();

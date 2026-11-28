@@ -15,7 +15,7 @@
     RUNNING: "running",
     ACCEPTED: "accepted",
     REJECTED: "rejected",
-    NO_TRANSITION: "no_transition",   // δ undefined -> implicit rejection
+    NO_TRANSITION: "no_transition",   // δ undefined
     MAX_STEPS: "max_steps",           // N_max reached
   });
   const HALTED = new Set([Status.ACCEPTED, Status.REJECTED, Status.NO_TRANSITION, Status.MAX_STEPS]);
@@ -36,6 +36,7 @@
     }
   }
 
+  const isObject = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
   const isString = (x) => typeof x === "string";
   const isSymbol = (x) => isString(x) && [...x].length === 1;
   const key = (state, symbol) => state + "\u0000" + symbol;
@@ -94,7 +95,9 @@
       const sigma = stringList("input_alphabet", true);
       const gamma = stringList("tape_alphabet", true);
 
-      let blank = data.blank === undefined ? "_" : data.blank;
+      if (!states.length) errors.push("'states' must not be empty.");
+      if (!gamma.length) errors.push("'tape_alphabet' must not be empty.");
+      let blank = data.blank;
       if (!isSymbol(blank)) { errors.push("'blank' must be a single character."); blank = "_"; }
 
       const stateField = (k) => {
@@ -117,9 +120,13 @@
       if (!Array.isArray(raw)) { errors.push("'transitions' must be a list of transition objects."); raw = []; }
       raw.forEach((item, i) => {
         const where = `transitions[${i}]`;
-        if (item === null || typeof item !== "object") { errors.push(`${where}: must be an object with keys from/read/to/write/move.`); return; }
+        if (!isObject(item)) { errors.push(`${where}: must be an object with keys from/read/to/write/move.`); return; }
         const missing = ["from", "read", "to", "write", "move"].filter((k) => !(k in item));
         if (missing.length) { errors.push(`${where}: missing key(s) ${JSON.stringify(missing)}.`); return; }
+        if (!["from", "read", "to", "write", "move"].every((k) => isString(item[k]))) {
+          errors.push(`${where}: all transition fields must be strings.`);
+          return;
+        }
         const t = { state: item.from, read: item.read, next: item.to, write: item.write, move: item.move };
         if (states.length && !states.includes(t.state)) errors.push(`${where}: unknown source state '${t.state}'.`);
         if (states.length && !states.includes(t.next)) errors.push(`${where}: unknown target state '${t.next}'.`);
@@ -140,6 +147,7 @@
     isHalting(state) { return state === this.accept || state === this.reject; }
 
     invalidSymbols(text) {
+      if (!isString(text)) throw new InputError("Input must be a string.", []);
       const allowed = new Set(this.sigma);
       return [...text].map((symbol, index) => ({ index, symbol })).filter((x) => !allowed.has(x.symbol));
     }
@@ -156,7 +164,7 @@
   /* -------------------------------------------------------------- Simulator */
   class Simulator {
     constructor(definition, input, maxSteps = 10000) {
-      if (!Number.isInteger(maxSteps) || maxSteps < 1) throw new RangeError("N_max must be a positive integer.");
+      if (!Number.isSafeInteger(maxSteps) || maxSteps < 1) throw new RangeError("N_max must be a positive safe integer.");
       definition.checkInput(input);
       this.definition = definition;
       this.input = input;
@@ -194,7 +202,7 @@
       const t = this.definition.getTransition(this.state, symbol);
       if (!t) {
         this.status = Status.NO_TRANSITION;
-        this.message = `No transition defined for δ(${this.state}, ${symbol}) - implicit rejection.`;
+        this.message = `No transition defined for δ(${this.state}, ${symbol}).`;
         return null;
       }
       const record = {
@@ -224,18 +232,36 @@
   const DEFAULT_MAX_STEPS = 10000;
 
   function parsePreset(data, index) {
-    if (data === null || typeof data !== "object" || Array.isArray(data)) throw new ConfigError([`presets[${index}] must be an object.`]);
+    const location = `Preset ${index + 1}`;
+    if (!isObject(data)) throw new ConfigError([`${location} must be an object.`]);
     const machine = "machine" in data ? data.machine : data;
-    const name = String(data.name || `Machine ${index + 1}`);
+    const stringField = (field, fallback, nonempty = false) => {
+      const value = Object.hasOwn(data, field) ? data[field] : fallback;
+      if (!isString(value) || (nonempty && !value.trim()))
+        throw new ConfigError([`${location}: '${field}' must be a valid string.`]);
+      return value;
+    };
+    const id = stringField("id", `custom-${index + 1}`, true);
+    const name = stringField("name", `Machine ${index + 1}`, true);
+    const description = stringField("description", "");
+    const defaultInput = stringField("default_input", "");
     let definition;
     try { definition = MachineDefinition.fromObject(machine, name); }
     catch (e) { if (e instanceof ConfigError) throw new ConfigError(e.errors.map((m) => `[${name}] ${m}`)); throw e; }
     const maxSteps = data.max_steps === undefined ? DEFAULT_MAX_STEPS : data.max_steps;
-    if (!Number.isInteger(maxSteps) || maxSteps < 1) throw new ConfigError([`[${name}] 'max_steps' must be a positive integer.`]);
-    return {
-      id: String(data.id || `custom-${index + 1}`), name, description: String(data.description || ""),
-      definition, maxSteps, defaultInput: String(data.default_input || ""), examples: Array.isArray(data.examples) ? data.examples : [],
-    };
+    if (!Number.isSafeInteger(maxSteps) || maxSteps < 1) throw new ConfigError([`[${name}] 'max_steps' must be a positive safe integer.`]);
+    const examples = Object.hasOwn(data, "examples") ? data.examples : [];
+    if (!Array.isArray(examples)) throw new ConfigError([`[${name}] 'examples' must be a list.`]);
+    examples.forEach((example, i) => {
+      const fields = ["expected", "expected_tape"];
+      if (!isObject(example) || !isString(example.input) ||
+          fields.some((field) => Object.hasOwn(example, field) && !isString(example[field])))
+        throw new ConfigError([`[${name}] Example ${i + 1} must have a string input and string result fields.`]);
+      if (Object.hasOwn(example, "expected_steps") &&
+          (!Number.isSafeInteger(example.expected_steps) || example.expected_steps < 0))
+        throw new ConfigError([`[${name}] Example ${i + 1}: invalid 'expected_steps'.`]);
+    });
+    return { id, name, description, definition, maxSteps, defaultInput, examples };
   }
 
   /** Accepts the parsed JSON of presets.json, a single preset, or a bare machine definition. */
@@ -243,11 +269,14 @@
     let items;
     if (data && typeof data === "object" && !Array.isArray(data)) {
       if ("presets" in data) {
-        if (!Array.isArray(data.presets)) throw new ConfigError(["'presets' must be a list."]);
+        if (!Array.isArray(data.presets) || !data.presets.length) throw new ConfigError(["'presets' must be a non-empty list."]);
         items = data.presets;
       } else items = [data];
     } else throw new ConfigError(["The top-level JSON value must be an object."]);
-    return items.map(parsePreset);
+    const presets = items.map(parsePreset);
+    if (new Set(presets.map((p) => p.id)).size !== presets.length)
+      throw new ConfigError(["Preset IDs must be unique within a collection."]);
+    return presets;
   }
 
   const api = { Status, ConfigError, InputError, Tape, MachineDefinition, Simulator, parseConfig, fmtTransition, DEFAULT_MAX_STEPS };

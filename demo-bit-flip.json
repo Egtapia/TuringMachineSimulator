@@ -1,0 +1,40 @@
+{
+  "id": "demo-bit-flip",
+  "name": "Demo: Flip every bit",
+  "description": "Flips each bit from left to right, then returns the head to the beginning. Example: 10110 becomes 01001.",
+  "max_steps": 100,
+  "default_input": "10110",
+  "examples": [
+    { "input": "10110", "expected": "accepted", "expected_tape": "01001", "expected_steps": 12 },
+    { "input": "111", "expected": "accepted", "expected_tape": "000", "expected_steps": 8 }
+  ],
+  "machine": {
+    "states": [
+      "q_flip",
+      "q_return",
+      "q_accept",
+      "q_reject"
+    ],
+    "input_alphabet": [
+      "0",
+      "1"
+    ],
+    "tape_alphabet": [
+      "0",
+      "1",
+      "_"
+    ],
+    "blank": "_",
+    "start_state": "q_flip",
+    "accept_state": "q_accept",
+    "reject_state": "q_reject",
+    "transitions": [
+      { "from": "q_flip", "read": "0", "to": "q_flip", "write": "1", "move": "R" },
+      { "from": "q_flip", "read": "1", "to": "q_flip", "write": "0", "move": "R" },
+      { "from": "q_flip", "read": "_", "to": "q_return", "write": "_", "move": "L" },
+      { "from": "q_return", "read": "0", "to": "q_return", "write": "0", "move": "L" },
+      { "from": "q_return", "read": "1", "to": "q_return", "write": "1", "move": "L" },
+      { "from": "q_return", "read": "_", "to": "q_accept", "write": "_", "move": "R" }
+    ]
+  }
+}

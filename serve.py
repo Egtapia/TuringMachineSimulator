@@ -3,7 +3,7 @@
 Browsers refuse to `fetch()` presets.json when index.html is opened straight from
 disk, so run this from the project root:
 
-    python serve.py            ->  http://localhost:8000/web/
+    python serve.py            ->  http://127.0.0.1:8000/web/
     python serve.py 9000       ->  custom port
 """
 import http.server
@@ -27,8 +27,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        url = f"http://localhost:{PORT}/web/"
+    with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
+        url = f"http://127.0.0.1:{PORT}/web/"
         print(f"Turing Machine Simulator running at {url}   (Ctrl+C to stop)")
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
         try:

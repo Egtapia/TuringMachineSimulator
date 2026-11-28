@@ -10,6 +10,7 @@ Examples
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
 import time
@@ -30,7 +31,7 @@ STATUS_STYLE = {
     Status.RUNNING: ("RUNNING", YELLOW),
     Status.ACCEPTED: ("ACCEPTED", GREEN),
     Status.REJECTED: ("REJECTED", RED),
-    Status.NO_TRANSITION: ("REJECTED (no transition)", RED),
+    Status.NO_TRANSITION: ("UNDEFINED TRANSITION", YELLOW),
     Status.MAX_STEPS: ("STEP LIMIT REACHED", MAGENTA),
 }
 
@@ -134,7 +135,7 @@ def enable_ansi() -> None:
 
 
 def choose_preset(presets: List[Preset], wanted: Optional[str]) -> Preset:
-    if wanted:
+    if wanted is not None:
         for i, p in enumerate(presets, 1):
             if wanted in (p.id, str(i)):
                 return p
@@ -158,13 +159,15 @@ def ask_input(preset: Preset) -> str:
         shown = ", ".join(repr(e["input"]) for e in preset.examples[:4])
         print(f"Examples: {shown}")
     while True:
-        raw = input(f"Input string [default {preset.default_input!r}]: ").strip()
-        text = raw if raw else preset.default_input
+        raw = input(f"Input string [default {preset.default_input!r}]: ")
+        if not raw:
+            return preset.default_input
+        text = raw
         try:
             d.check_input(text)
             return text
         except InputError as exc:
-            print(f"  ✗ {exc}")
+            print(f"  INVALID INPUT: {exc}")
 
 
 def exit_code(status: Status) -> int:
@@ -216,7 +219,10 @@ class Session:
             if cmd == "r":
                 self.run_continuous(delay)
                 return
-            self.show(self.sim.step())
+            if not cmd:
+                self.show(self.sim.step())
+            else:
+                print("Use Enter, r, or q.")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -249,22 +255,33 @@ def main(argv: Optional[List[str]] = None) -> int:
         print()
         print(machine_banner(preset, color))
         text = args.text if args.text is not None else ask_input(preset)
-        max_steps = args.max_steps or preset.max_steps
+        max_steps = preset.max_steps if args.max_steps is None else args.max_steps
+        if not math.isfinite(args.delay) or args.delay < 0:
+            raise ValueError("Delay must be a finite, non-negative number.")
         sim = Simulator(preset.definition, text, max_steps)
-    except (ConfigError, InputError, ValueError) as exc:
+    except InputError as exc:
+        print(f"INVALID INPUT: {exc}", file=sys.stderr)
+        return 2
+    except (ConfigError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
     except (EOFError, KeyboardInterrupt):
         print("\nAborted.")
         return 130
 
-    mode = args.mode
-    if mode is None:
-        mode = "run" if args.final_only else (
-            "run" if input("\nMode - [s]tep-through or [r]un continuously? [s]: ").strip().lower().startswith("r")
-            else "step")
-
-    session = Session(sim, color, args.trace_file, args.final_only)
+    try:
+        mode = args.mode
+        if mode is None:
+            mode = "run" if args.final_only else (
+                "run" if input("\nMode - [s]tep-through or [r]un continuously? [s]: ").strip().lower().startswith("r")
+                else "step")
+        session = Session(sim, color, args.trace_file, args.final_only)
+    except (EOFError, KeyboardInterrupt):
+        print("\nAborted.")
+        return 130
+    except OSError as exc:
+        print(f"Could not open trace file: {exc}", file=sys.stderr)
+        return 2
     session.show(None)
     try:
         if mode == "run":

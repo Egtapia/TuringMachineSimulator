@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, List, Optional
 
-from .definition import MachineDefinition, Transition
+from .definition import MAX_SAFE_STEPS, MachineDefinition, Transition
 from .tape import Tape
 
 
@@ -14,7 +14,7 @@ class Status(str, Enum):
     RUNNING = "running"
     ACCEPTED = "accepted"            # reached q_accept
     REJECTED = "rejected"            # reached q_reject
-    NO_TRANSITION = "no_transition"  # delta undefined -> implicit rejection
+    NO_TRANSITION = "no_transition"  # delta undefined
     MAX_STEPS = "max_steps"          # N_max reached (possible infinite loop)
 
 
@@ -39,8 +39,8 @@ class Simulator:
 
     def __init__(self, definition: MachineDefinition, input_string: str,
                  max_steps: int = 10_000, keep_history: bool = True):
-        if not isinstance(max_steps, int) or max_steps < 1:
-            raise ValueError("max_steps (N_max) must be a positive integer.")
+        if type(max_steps) is not int or not 1 <= max_steps <= MAX_SAFE_STEPS:
+            raise ValueError("max_steps (N_max) must be a positive safe integer.")
         definition.check_input(input_string)         # raises InputError
         self.definition = definition
         self.input_string = input_string
@@ -88,8 +88,7 @@ class Simulator:
         t = self.definition.get_transition(self.state, symbol)
         if t is None:
             self.status = Status.NO_TRANSITION
-            self.message = (f"No transition defined for δ({self.state}, {symbol}) "
-                            "- implicit rejection.")
+            self.message = (f"No transition defined for δ({self.state}, {symbol}).")
             return None
 
         head_before, state_before = self.head, self.state

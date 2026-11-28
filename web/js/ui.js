@@ -9,13 +9,14 @@
 
   const STATUS_TEXT = {
     ready: "Ready", running: "Running", accepted: "Accepted", rejected: "Rejected",
-    no_transition: "No transition", max_steps: "Step limit",
+    no_transition: "Undefined transition", max_steps: "Step limit",
+    invalid_input: "Invalid input", invalid_limit: "Invalid step limit",
   };
   const RESULT_VIEW = {
     accepted: { icon: "✅", title: "Accepted" },
     rejected: { icon: "⛔", title: "Rejected" },
-    no_transition: { icon: "⚠️", title: "Rejected - undefined transition" },
-    max_steps: { icon: "♾️", title: "Step limit reached (possible infinite loop)" },
+    no_transition: { icon: "⚠️", title: "Undefined transition" },
+    max_steps: { icon: "♾️", title: "Step limit reached" },
   };
 
   /* ------------------------------------------------------------------ tape */
@@ -52,13 +53,13 @@
   }
 
   /* ----------------------------------------------------------------- stats */
-  function renderStats(sim, els) {
+  function renderStats(sim, els, blockedStatus) {
     els.state.textContent = sim ? sim.state : "–";
     els.step.textContent = sim ? sim.steps : 0;
-    els.head.textContent = sim ? sim.head : 0;
-    const status = sim ? sim.status : "ready";
-    els.status.textContent = STATUS_TEXT[status];
-    els.status.className = "badge " + status;
+    els.head.textContent = sim ? sim.head : "–";
+    const status = sim ? sim.status : blockedStatus;
+    els.status.textContent = STATUS_TEXT[status] || "—";
+    els.status.className = status ? "badge " + status : "badge";
   }
 
   /*formal definition */
@@ -74,7 +75,7 @@
 
   function renderDelta(def, tbody) {
     tbody.innerHTML = def.transitionList().map((t) =>
-      `<tr data-k="${esc(t.state)}\u0000${esc(t.read)}"><td>${esc(t.state)}</td><td>${esc(t.read)}</td><td>→</td>` +
+      `<tr><td>${esc(t.state)}</td><td>${esc(t.read)}</td><td>→</td>` +
       `<td>${esc(t.next)}</td><td>${esc(t.write)}</td><td>${esc(t.move)}</td></tr>`).join("");
   }
 
@@ -117,6 +118,17 @@
   function traceStep(els, rec, fmt) {
     addTraceRow(els, [rec.step, `${esc(rec.stateBefore)} → ${esc(rec.stateAfter)}`, esc(fmt(rec.transition))]);
   }
+  function rebuildTrace(els, sim, fmt) {
+    const records = sim.history.slice(-MAX_TRACE_ROWS);
+    const first = sim.steps - records.length;
+    els.body.innerHTML = (first === 0 && records.length < MAX_TRACE_ROWS
+      ? `<tr><td>0</td><td>${esc(sim.definition.start)}</td><td>initial configuration</td></tr>` : "") +
+      records.map((rec) => `<tr><td>${rec.step}</td><td>${esc(rec.stateBefore)} → ${esc(rec.stateAfter)}</td>` +
+        `<td>${esc(fmt(rec.transition))}</td></tr>`).join("");
+    els.dropped = first || (records.length === MAX_TRACE_ROWS ? 1 : 0);
+    els.body.lastElementChild?.classList.add("latest");
+    els.wrap.scrollTop = els.wrap.scrollHeight;
+  }
   function traceFinal(els, sim) {
     addTraceRow(els, ["■", esc(sim.state), esc(sim.message)], "final-" + sim.status);
   }
@@ -143,10 +155,10 @@
     sim.history.forEach((r) => lines.push(
       `Step ${String(r.step).padStart(4)} | ${r.stateBefore} -> ${r.stateAfter} | head ${r.headBefore} -> ${r.headAfter} | ${fmt(r.transition)}`));
     lines.push("", `Result: ${STATUS_TEXT[sim.status]} - ${sim.message}`, `Steps: ${sim.steps}`,
-      `Final state: ${sim.state}`, `Tape: ${sim.tape.contents() || "(empty)"}`);
+      `Final state: ${sim.state}`, `Head position: ${sim.head}`, `Tape: ${sim.tape.contents() || "(empty)"}`);
     return lines.join("\n");
   }
 
   root.UI = { esc, renderTape, renderStats, renderTuple, renderDelta, highlightDelta, clearTrace, traceInitial, traceStep,
-              traceFinal, updateTraceCount, showResult, hideResult, traceToText };
+              traceFinal, rebuildTrace, updateTraceCount, showResult, hideResult, traceToText };
 })(window);
